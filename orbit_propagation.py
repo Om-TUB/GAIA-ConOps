@@ -410,11 +410,20 @@ def generate_timeline(
     step_s=cfg.SIM_TIMESTEP_S,
 ):
 
+    # Start the simulation two orbital periods before the
+    # currently defined mission epoch, while keeping the
+    # displayed simulation clock starting at 00:00:00.
+    pre_roll_s = 2 * cfg.GAIA_ORBITAL_PERIOD_S
+
+    # Time shown by the simulation / animation.
     t = np.arange(
         0,
-        duration_s,
+        pre_roll_s + duration_s,
         step_s,
     )
+
+    # Actual propagation time relative to the mission epoch.
+    propagation_t = t - pre_roll_s
 
     # H2Sat: real satellite, propagated from its actual tracked TLE.
     h2sat_satrec = sgp4prop.satrec_from_tle(
@@ -425,7 +434,7 @@ def generate_timeline(
     h2sat_track = sgp4prop.propagate_sgp4(
         h2sat_satrec,
         cfg.SIM_EPOCH_UTC,
-        t,
+        propagation_t,
     )
 
     results = {
@@ -455,7 +464,7 @@ def generate_timeline(
         track = sgp4prop.propagate_sgp4(
             satrec,
             cfg.SIM_EPOCH_UTC,
-            t,
+            propagation_t,
         )
 
         # Ground station + IoT visibility
@@ -512,7 +521,6 @@ def generate_timeline(
         )
 
     return results
-
 
 # Mode assignment
 def assign_modes(

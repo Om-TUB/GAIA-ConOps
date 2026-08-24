@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, PillowWriter
 import matplotlib.image as mpimg
 import config as cfg
 
@@ -847,6 +847,14 @@ class GaiaConopsAnimator:
             blit=False,
             repeat=True,
         )
+
+        # Optional GIF export; enable SAVE_GIF = True in config.py.
+        if getattr(cfg, "SAVE_GIF", False):
+            self.anim.save(
+                cfg.GIF_FILENAME,
+                writer=PillowWriter(fps=cfg.GIF_FPS),
+                dpi=cfg.GIF_DPI,
+            )
 
         plt.show()
 

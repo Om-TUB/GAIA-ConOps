@@ -23,7 +23,7 @@ SECONDS_PER_DAY = 86400.0
 _SIM_EPOCH_DATE = datetime(2026, 8, 24, 0, 0, 0, tzinfo=timezone.utc)
 
 # SIMULATION WINDOW
-SIM_DURATION_S = 24 * 3600       # 24 hours, as requested
+SIM_DURATION_S = 3600       # 3 hours: enough for two useful GAIA passes
 SIM_TIMESTEP_S = 30              # propagation step (s) — animation subsamples this
 # Epoch: arbitrary reference start time (J2000-relative days), used only for
 # Earth rotation angle (GMST) bookkeeping. Day 0 = start of simulation.
@@ -52,6 +52,11 @@ _cos_i = -_SSO_RAAN_RATE_RAD_S / (1.5 * _n_gaia * J2 * (R_EARTH / _p_gaia) ** 2)
 GAIA_INCLINATION_DEG = np.rad2deg(np.arccos(_cos_i))   # computed, ~97.4 deg
 
 GAIA_ORBITAL_PERIOD_S = 2 * np.pi * np.sqrt(GAIA_SEMI_MAJOR_AXIS_KM**3 / MU_EARTH)
+
+# Start slightly east/right of the first Etosha pass.
+# Negative = start before the designed 10:30 crossing.
+GAIA_START_OFFSET_S = -60.0      # 1 minute before the target crossing
+
 
 # --- RAAN: chosen so ground track crosses Namibia at 10:30 LOCAL SOLAR TIME
 # For a sun-synchronous orbit, Local Time of Ascending/relevant Node is fixed
@@ -88,7 +93,15 @@ TARGET_LOCAL_SOLAR_TIME_HOURS = 10.5   # 10:30 am
 #   sin(lat) = sin(i) * sin(u)
 _sin_u = np.sin(np.deg2rad(ETOSHA_LAT_DEG)) / np.sin(np.deg2rad(GAIA_INCLINATION_DEG))
 _u_ascending = np.arcsin(np.clip(_sin_u, -1.0, 1.0))   # radians, ascending-pass solution
-GAIA_TRUE_ANOMALY_0_DEG = np.rad2deg(_u_ascending) - GAIA_ARG_PERIGEE_DEG
+# Keep RAAN targeted to the Etosha crossing, but start the simulation
+# one minute earlier so the first pass enters the animation from the right.
+GAIA_TRUE_ANOMALY_0_DEG = (
+    np.rad2deg(_u_ascending)
+    - GAIA_ARG_PERIGEE_DEG
+    + np.rad2deg(
+        (2.0 * np.pi / GAIA_ORBITAL_PERIOD_S) * GAIA_START_OFFSET_S
+    )
+)
 
 # Local solar time -> hour angle of sun relative to satellite subpoint longitude.
 # LST_hours = 12 + (lon_deg - subsolar_lon_deg) / 15
@@ -263,8 +276,14 @@ MODE_COLORS = {
 ISL_PREFER_REALTIME = True
 
 # VISUALIZATION SETTINGS
-ANIMATION_INTERVAL_MS = 500        # wall-clock ms between animation frames
-FRAME_SIM_STEP_S = 30             # sim-seconds advanced per animation frame
+ANIMATION_INTERVAL_MS = 75        # wall-clock ms between animation frames
+FRAME_SIM_STEP_S = 45             # sim-seconds advanced per animation frame
 MAP_LON_RANGE = (-180, 180)
 MAP_LAT_RANGE = (-90, 90)
 GROUND_TRACK_TRAIL_MINUTES = 30   # length of fading trail behind each satellite
+
+# GIF EXPORT
+SAVE_GIF = True                  # set True to export the animation
+GIF_FILENAME = "gaia_conops.gif"
+GIF_FPS = 20
+GIF_DPI = 120
