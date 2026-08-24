@@ -20,6 +20,70 @@ def format_hms(seconds):
 
 def yes_no(value):
     return "YES" if bool(value) else "NO"
+
+# ---------------------------------------------------------------------------
+# Mode definition
+# ---------------------------------------------------------------------------
+# Priority from config.py:
+#   1. IoT/Payload
+#   2. DTE Optical
+#   3. TC/TM
+#   4. ISL
+#   5. Idle/Safe
+#
+# The first matching condition wins.
+
+MODE_PRIORITY = (
+    "IoT/Payload",
+    "DTE Optical",
+    "TC/TM",
+    "ISL",
+    "Idle/Safe",
+)
+
+# Non-white fallbacks ensure every mode remains visible on the map.
+# cfg.MODE_COLORS is preferred whenever it contains a usable colour.
+DEFAULT_MODE_COLORS = {
+    "IoT/Payload": "#00E5FF",
+    "DTE Optical": "#FF9F1C",
+    "TC/TM": "#2ECC71",
+    "ISL": "#C77DFF",
+    "Idle/Safe": "#7F8C8D",
+}
+
+
+def _is_usable_mode_color(color):
+    if color is None:
+        return False
+    return str(color).strip().lower() not in {
+        "white", "#fff", "#ffffff", "w"
+    }
+
+
+def _mode_color(mode):
+    config_color = getattr(cfg, "MODE_COLORS", {}).get(mode)
+    if _is_usable_mode_color(config_color):
+        return config_color
+    return DEFAULT_MODE_COLORS.get(mode, "#7F8C8D")
+
+
+def _resolve_mode(visibility, sees_h2sat):
+    """Resolve the current mode using config.py's priority order."""
+    if bool(visibility.get("IoT", False)):
+        return "IoT/Payload"
+
+    if bool(visibility.get("TUBOGS (Optical)", False)):
+        return "DTE Optical"
+
+    if bool(visibility.get("TU Berlin (UHF/VHF)", False)):
+        return "TC/TM"
+
+    if getattr(cfg, "ISL_PREFER_REALTIME", False) and sees_h2sat:
+        return "ISL"
+
+    return "Idle/Safe"
+
+
 # Animator
 class GaiaConopsAnimator:
 
@@ -383,14 +447,13 @@ class GaiaConopsAnimator:
             va="top",
         )
 
-        # Static legend
+        # Static legend uses the same mode definition as the satellites.
         legend_handles = []
 
-        for mode, color in cfg.MODE_COLORS.items():
-
+        for mode in MODE_PRIORITY:
             legend_handles.append(
                 mpatches.Patch(
-                    color=color,
+                    color=_mode_color(mode),
                     label=mode
                 )
             )
@@ -534,17 +597,24 @@ class GaiaConopsAnimator:
                 sat["alt_km"][idx]
             )
 
-            mode = sat["mode"][idx]
-
             sees_h2sat = bool(
                 sat["sees_h2sat"][idx]
             )
 
-            # Satellite marker
-            mode_color = cfg.MODE_COLORS.get(
-                mode,
-                "white"
+            # Re-resolve the mode from the live visibility state so the
+            # visualization always follows config.py's priority order.
+            visibility_now = {
+                gs_name: bool(sat["visibility"][gs_name][idx])
+                for gs_name in sat["visibility"]
+            }
+
+            mode = _resolve_mode(
+                visibility_now,
+                sees_h2sat,
             )
+
+            # Satellite colour follows the resolved operating mode.
+            mode_color = _mode_color(mode)
 
             point = self.sat_points[sat_name]
 
@@ -581,6 +651,7 @@ class GaiaConopsAnimator:
                 trail_lon,
                 trail_lat
             )
+            self.sat_trails[sat_name].set_color(mode_color)
 
             # Satellite map label
             label_text = (

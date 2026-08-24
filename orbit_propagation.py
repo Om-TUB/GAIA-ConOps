@@ -525,9 +525,10 @@ def assign_modes(
     Priority:
 
         1. IoT/Payload
-        2. ISL
-        3. DTE Optical
-        4. Idle/Safe
+        2. DTE Optical
+        3. Communication (TC/TM)
+        4. ISL
+        5. Idle/Safe
     """
 
     n = len(sees_h2sat)
@@ -544,14 +545,17 @@ def assign_modes(
         "TUBOGS (Optical)"
     ]
 
-    # Priority 3: DTE Optical
-    modes[tubogs_visible] = "DTE Optical"
+    tc_tm_visible = visibility ["TU Berlin (UHF/VHF)"]
 
-    # Priority 2: ISL
+    # Priority 4: ISL
     if cfg.ISL_PREFER_REALTIME:
-        modes[sees_h2sat] = "ISL (Real-Time)"
-    else:
-        modes[sees_h2sat] = "ISL (Store&Fwd)"
+        modes[sees_h2sat] = "ISL"
+
+    # Priority 2: DTE Optical
+    modes[tc_tm_visible] = "TC/TM"
+
+    # Priority 2: DTE Optical
+    modes[tubogs_visible] = "DTE Optical"
 
     # Priority 1: IoT/Payload
     modes[iot_visible] = "IoT/Payload"
