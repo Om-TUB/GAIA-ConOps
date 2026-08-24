@@ -1,40 +1,21 @@
-"""
-GAIA CONOPS Simulator — Configuration
-======================================
-ALL mission parameters live here. Nothing is hardcoded elsewhere.
-Edit this file to change orbits, ground stations, or mode logic thresholds.
-
-Sources:
-- GAIA-MISSION Phase 1 proposal document (satellite bus, ISL frequencies)
-- ConOps.docx (satellite modes list, ground station names)
-- H2M-DLR-RD-TN-009 v2.1 (H2Sat ISL datasheet: orbital slot, antenna gains)
-- User-provided coordinates (2024-message): TUB, Etosha, TUBOGS, Fraunhofer IIS
-"""
-
 import numpy as np
 
-# ---------------------------------------------------------------------------
 # PHYSICAL CONSTANTS
-# ---------------------------------------------------------------------------
 MU_EARTH = 398600.4418          # km^3/s^2, Earth gravitational parameter
 R_EARTH = 6378.137               # km, WGS84 equatorial radius
 J2 = 1.08262668e-3               # Earth J2 oblateness coefficient
 EARTH_ROTATION_RATE = 360.98564736629 / 86400.0   # deg/s (sidereal, precise)
 SECONDS_PER_DAY = 86400.0
 
-# ---------------------------------------------------------------------------
 # SIMULATION WINDOW
-# ---------------------------------------------------------------------------
 SIM_DURATION_S = 24 * 3600       # 24 hours, as requested
 SIM_TIMESTEP_S = 30              # propagation step (s) — animation subsamples this
 # Epoch: arbitrary reference start time (J2000-relative days), used only for
 # Earth rotation angle (GMST) bookkeeping. Day 0 = start of simulation.
 EPOCH_DAY_OFFSET = 0.0
 
-# ---------------------------------------------------------------------------
-# GAIA LEO SATELLITE ORBIT (AICP-Cube A / B)
-# ---------------------------------------------------------------------------
-# User-specified: circular SSO, 500 km altitude, ground track crosses
+# GAIA LEO SATELLITE ORBIT (AICP-Cube A / B)-
+# circular SSO, 500 km altitude, ground track crosses
 # Namibia (16 deg E) at 10:30 local solar time. Two sats, same plane,
 # separated by < 1000 km along-track.
 
@@ -140,35 +121,20 @@ SATELLITES = {
     ),
 }
 
-# ---------------------------------------------------------------------------
 # H2SAT (Heinrich Hertz) — GEO relay satellite
-# ---------------------------------------------------------------------------
-# Per H2M-DLR-RD-TN-009 v2.1, p.2: "Das Datenblatt gilt für die betriebliche
-# Orbitposition 0,7 deg Ost." -> operational slot 0.7 deg East, GEO.
 H2SAT_LON_DEG = 0.7
 H2SAT_ALTITUDE_KM = 35786.0   # standard GEO altitude
 H2SAT_SEMI_MAJOR_AXIS_KM = R_EARTH + H2SAT_ALTITUDE_KM
 H2SAT_ECCENTRICITY = 0.0
 H2SAT_INCLINATION_DEG = 0.0
-# GEO station-keeps at fixed longitude; modeled as fixed subsatellite point
-# (no meaningful "orbit propagation" needed for a 24h CONOPS view since GEO
-# period = 1 sidereal day and it is nominally stationary over 0.7E).
 
-# ISL antenna coverage (from datasheet, p.5): tracking antenna can steer to
-# cover the entire visible Earth from GEO (roll/pitch +/-13.5 deg gimbal).
-# We treat H2Sat as visible to a LEO satellite whenever the LEO satellite is
-# within H2Sat's Earth-facing hemisphere (standard GEO visibility geometry),
-# since the ISL antenna datasheet confirms full-Earth-disk coverage.
-
-# ---------------------------------------------------------------------------
 # GROUND STATIONS / FIXED SITES (user-provided coordinates)
-# ---------------------------------------------------------------------------
 GROUND_STATIONS = {
     "TU Berlin (UHF/VHF)": dict(
         lat_deg=52.5152,
         lon_deg=13.3236,
         band="UHF/VHF",
-        min_elevation_deg=5.0,   # standard assumption for RF link visibility mask
+        min_elevation_deg=5.0,   
         color="#2ca02c",
         marker="^",
     ),
@@ -176,7 +142,7 @@ GROUND_STATIONS = {
         lat_deg=53.3297,   # 53 19' 46.9" N
         lon_deg=13.0725,   # 13 04' 21.0" E
         band="Optical",
-        min_elevation_deg=20.0,   # optical links typically need higher min elevation
+        min_elevation_deg=20.0,   
         color="#9467bd",
         marker="^",
     ),
@@ -190,9 +156,7 @@ GROUND_STATIONS = {
     ),
 }
 
-# ---------------------------------------------------------------------------
 # IoT PAYLOAD TARGET AREA (Etosha National Park, Namibia)
-# ---------------------------------------------------------------------------
 IOT_PAYLOAD_SITE = dict(
     name="Etosha NP (IoT tags)",
     lat_deg=-19.0,     # 19 00' 00" S
@@ -202,16 +166,9 @@ IOT_PAYLOAD_SITE = dict(
     marker="*",
 )
 
-# ---------------------------------------------------------------------------
-# SATELLITE / ADCS MODES
-# ---------------------------------------------------------------------------
-# Per ConOps.docx section 5, the following modes are listed (ADCS requirement
-# columns were blank in the source document). Per your instruction, satellite
-# modes and ADCS modes are treated as the same, and HPLR is a software
-# sub-mode of pointing accuracy layered on top of another mode, not a
-# separate physical attitude — implemented here as a modifier flag.
+# SATELLITE MODES
 #
-# Mode SELECTION LOGIC (explicit, since ConOps.docx did not define it):
+# Mode SELECTION LOGIC
 #   Priority order evaluated per satellite per timestep:
 #     1. IoT/Payload      -> Etosha IoT site is above min elevation (NOMINAL OPS)
 #     2. ISL (H2Sat)       -> H2Sat visible AND (any ground station visible
@@ -233,8 +190,7 @@ IOT_PAYLOAD_SITE = dict(
 #                              the above link opportunities exist
 #
 # This priority order is a MODELING CHOICE to make the visualization useful;
-# edit MODE_PRIORITY logic in orbit_propagation.py if you want different
-# behavior.
+# edit MODE_PRIORITY logic in orbit_propagation.py for different behavior.
 
 MODE_COLORS = {
     "IoT/Payload":       "#2ca02c",   # green - nominal ops
@@ -246,13 +202,10 @@ MODE_COLORS = {
 
 # Fraction-based toggle for ISL link type when both LEO-H2Sat and H2Sat-
 # ground geometry allow it; kept simple/deterministic rather than a random
-# power-budget model since none was specified in the source documents.
 # Set True: prefer real-time whenever geometrically possible.
 ISL_PREFER_REALTIME = True
 
-# ---------------------------------------------------------------------------
 # VISUALIZATION SETTINGS
-# ---------------------------------------------------------------------------
 ANIMATION_INTERVAL_MS = 500        # wall-clock ms between animation frames
 FRAME_SIM_STEP_S = 30             # sim-seconds advanced per animation frame
 MAP_LON_RANGE = (-180, 180)

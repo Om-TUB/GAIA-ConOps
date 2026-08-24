@@ -1,41 +1,12 @@
-"""
-GAIA CONOPS Simulator — 2D live mission visualization
-========================================================
-
-Features:
-- NASA Blue Marble equirectangular Earth background
-- Live GAIA-A / GAIA-B ground tracks
-- Ground station contact visualization
-- H2Sat ISL visibility visualization
-- Live satellite mode display
-- Mission status panel
-- Slower, human-readable animation
-
-Required local file:
-    earth_texture.jpg
-
-The Earth texture must be an equirectangular world image covering:
-    longitude: -180 .. +180 deg
-    latitude:  -90 .. +90 deg
-
-NASA Blue Marble is recommended.
-"""
-
 import os
-
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.animation import FuncAnimation
 import matplotlib.image as mpimg
-
 import config as cfg
 
-
-# ---------------------------------------------------------------------------
 # Utility functions
-# ---------------------------------------------------------------------------
-
 def format_hms(seconds):
     """Convert simulation seconds to HH:MM:SS."""
     seconds = max(0, float(seconds))
@@ -49,12 +20,7 @@ def format_hms(seconds):
 
 def yes_no(value):
     return "YES" if bool(value) else "NO"
-
-
-# ---------------------------------------------------------------------------
 # Animator
-# ---------------------------------------------------------------------------
-
 class GaiaConopsAnimator:
 
     def __init__(self, timeline):
@@ -65,9 +31,8 @@ class GaiaConopsAnimator:
         self.dt = self.t[1] - self.t[0]
         self.n_steps = len(self.t)
 
-        # --------------------------------------------------------------
         # Animation stepping
-        # --------------------------------------------------------------
+
 
         self.step_stride = max(
             1,
@@ -107,10 +72,7 @@ class GaiaConopsAnimator:
 
         self._build_figure()
 
-    # ------------------------------------------------------------------
     # Earth texture
-    # ------------------------------------------------------------------
-
     def _load_earth_texture(self):
 
         texture_path = os.path.join(
@@ -132,10 +94,7 @@ class GaiaConopsAnimator:
 
         return image
 
-    # ------------------------------------------------------------------
     # Figure construction
-    # ------------------------------------------------------------------
-
     def _build_figure(self):
 
         self.fig = plt.figure(figsize=(17, 9))
@@ -150,10 +109,7 @@ class GaiaConopsAnimator:
             [0.74, 0.08, 0.24, 0.84]
         )
 
-        # --------------------------------------------------------------
         # Map
-        # --------------------------------------------------------------
-
         self.ax.set_xlim(*cfg.MAP_LON_RANGE)
         self.ax.set_ylim(*cfg.MAP_LAT_RANGE)
 
@@ -179,10 +135,7 @@ class GaiaConopsAnimator:
         for spine in self.ax.spines.values():
             spine.set_color("white")
 
-        # --------------------------------------------------------------
         # Earth image
-        # --------------------------------------------------------------
-
         self.earth_image = self._load_earth_texture()
 
         self.ax.imshow(
@@ -199,10 +152,7 @@ class GaiaConopsAnimator:
             interpolation="bilinear",
         )
 
-        # --------------------------------------------------------------
         # Grid / equator
-        # --------------------------------------------------------------
-
         self.ax.axhline(
             0,
             color="white",
@@ -219,10 +169,7 @@ class GaiaConopsAnimator:
             zorder=1
         )
 
-        # --------------------------------------------------------------
         # Ground stations
-        # --------------------------------------------------------------
-
         for name, site in cfg.GROUND_STATIONS.items():
 
             point = self.ax.scatter(
@@ -260,10 +207,7 @@ class GaiaConopsAnimator:
 
             self.gs_labels[name] = label
 
-        # --------------------------------------------------------------
         # IoT target
-        # --------------------------------------------------------------
-
         site = cfg.IOT_PAYLOAD_SITE
 
         self.iot_point = self.ax.scatter(
@@ -297,10 +241,7 @@ class GaiaConopsAnimator:
             ),
         )
 
-        # --------------------------------------------------------------
         # H2Sat
-        # --------------------------------------------------------------
-
         self.h2sat_point = self.ax.scatter(
             [cfg.H2SAT_LON_DEG],
             [0],
@@ -332,10 +273,7 @@ class GaiaConopsAnimator:
             ),
         )
 
-        # --------------------------------------------------------------
         # Satellites
-        # --------------------------------------------------------------
-
         for sat_name, elements in cfg.SATELLITES.items():
 
             point, = self.ax.plot(
@@ -380,10 +318,7 @@ class GaiaConopsAnimator:
             self.sat_trails[sat_name] = trail
             self.sat_labels[sat_name] = label
 
-        # --------------------------------------------------------------
         # Title
-        # --------------------------------------------------------------
-
         self.title_text = self.ax.text(
             0.5,
             1.025,
@@ -396,10 +331,7 @@ class GaiaConopsAnimator:
             fontweight="bold",
         )
 
-        # --------------------------------------------------------------
         # Status panel
-        # --------------------------------------------------------------
-
         self.status_ax.set_facecolor("#07111f")
 
         self.status_ax.set_xlim(0, 1)
@@ -432,10 +364,7 @@ class GaiaConopsAnimator:
             va="top",
         )
 
-        # --------------------------------------------------------------
         # Static legend
-        # --------------------------------------------------------------
-
         legend_handles = []
 
         for mode, color in cfg.MODE_COLORS.items():
@@ -459,10 +388,7 @@ class GaiaConopsAnimator:
 
         self.fig.patch.set_facecolor("#07111f")
 
-    # ------------------------------------------------------------------
     # Longitude wrapping
-    # ------------------------------------------------------------------
-
     def _unwrap_lon_trail(self, lon_deg_array):
 
         lon = np.asarray(
@@ -489,10 +415,7 @@ class GaiaConopsAnimator:
 
         return result
 
-    # ------------------------------------------------------------------
     # Contact line helper
-    # ------------------------------------------------------------------
-
     def _set_contact_line(
         self,
         key,
@@ -540,20 +463,14 @@ class GaiaConopsAnimator:
 
             line.set_alpha(0.0)
 
-    # ------------------------------------------------------------------
     # Update
-    # ------------------------------------------------------------------
-
     def _update(self, frame_num):
 
         idx = self.frame_indices[frame_num]
 
         t_now = self.t[idx]
 
-        # --------------------------------------------------------------
         # Title
-        # --------------------------------------------------------------
-
         self.title_text.set_text(
             "GAIA-MISSION CONOPS  |  "
             f"T+{format_hms(t_now)}  /  "
@@ -565,10 +482,7 @@ class GaiaConopsAnimator:
             f"T+ {format_hms(t_now)}"
         )
 
-        # --------------------------------------------------------------
         # Satellites
-        # --------------------------------------------------------------
-
         panel_y = 0.86
 
         for sat_name in cfg.SATELLITES:
@@ -593,10 +507,7 @@ class GaiaConopsAnimator:
                 sat["sees_h2sat"][idx]
             )
 
-            # ----------------------------------------------------------
             # Satellite marker
-            # ----------------------------------------------------------
-
             mode_color = cfg.MODE_COLORS.get(
                 mode,
                 "white"
@@ -617,10 +528,7 @@ class GaiaConopsAnimator:
                 "white"
             )
 
-            # ----------------------------------------------------------
             # Ground track
-            # ----------------------------------------------------------
-
             trail_start = max(
                 0,
                 idx - self.trail_len_steps
@@ -641,10 +549,7 @@ class GaiaConopsAnimator:
                 trail_lat
             )
 
-            # ----------------------------------------------------------
             # Satellite map label
-            # ----------------------------------------------------------
-
             label_text = (
                 f"{sat_name}\n"
                 f"{mode}"
@@ -662,10 +567,7 @@ class GaiaConopsAnimator:
                 mode_color
             )
 
-            # ----------------------------------------------------------
             # Ground station contacts
-            # ----------------------------------------------------------
-
             for gs_name, site in cfg.GROUND_STATIONS.items():
 
                 visible = bool(
@@ -687,10 +589,7 @@ class GaiaConopsAnimator:
                     linewidth=2.2,
                 )
 
-            # ----------------------------------------------------------
             # H2Sat contact
-            # ----------------------------------------------------------
-
             h2key = (
                 f"{sat_name}_H2SAT"
             )
@@ -707,10 +606,7 @@ class GaiaConopsAnimator:
                 linestyle="--",
             )
 
-            # ----------------------------------------------------------
             # Status panel
-            # ----------------------------------------------------------
-
             gs_lines = []
 
             for gs_name in cfg.GROUND_STATIONS:
@@ -795,10 +691,7 @@ class GaiaConopsAnimator:
 
             panel_y -= 0.42
 
-        # --------------------------------------------------------------
         # Collect artists for animation
-        # --------------------------------------------------------------
-
         artists = []
 
         artists.extend(
@@ -831,10 +724,7 @@ class GaiaConopsAnimator:
 
         return artists
 
-    # ------------------------------------------------------------------
     # Run
-    # ------------------------------------------------------------------
-
     def run(self):
 
         self.anim = FuncAnimation(
@@ -848,11 +738,7 @@ class GaiaConopsAnimator:
 
         plt.show()
 
-
-# ---------------------------------------------------------------------------
 # Public entry point
-# ---------------------------------------------------------------------------
-
 def run_animation(timeline):
 
     animator = GaiaConopsAnimator(

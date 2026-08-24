@@ -1,4 +1,6 @@
-#!/Users/omdaxini/GAIA-ConOps/.venv/bin/python
+#!/bin/sh
+'''exec' "/home/egse/Project GAIA/Code/GAIA-ConOps/.venv/bin/python3" "$0" "$@"
+' '''
 # -*- coding: utf-8 -*-
 import re
 import sys

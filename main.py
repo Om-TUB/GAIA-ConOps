@@ -1,13 +1,3 @@
-"""
-GAIA CONOPS Simulator — entry point
-======================================
-Run:  python main.py
-
-Prints key derived orbital parameters (since several were computed from
-your inputs rather than given directly) and then opens the live matplotlib
-animation window.
-"""
-
 import numpy as np
 import config as cfg
 import orbit_propagation as prop
@@ -73,5 +63,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    

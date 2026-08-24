@@ -1,14 +1,3 @@
-"""
-GAIA CONOPS Simulator — Orbit propagation & visibility geometry
-==================================================================
-Minimal-dependency (numpy only): two-body Keplerian propagation with J2
-secular drift on RAAN and argument of perigee. No skyfield/sgp4/astropy.
-
-This is NOT high-fidelity (no J2 short-period terms, no drag, no lunar/solar
-perturbation) — appropriate for a 24h CONOPS visualization, not for
-operational orbit determination.
-"""
-
 import numpy as np
 import config as cfg
 
