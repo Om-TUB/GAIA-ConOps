@@ -170,7 +170,21 @@ class GaiaConopsAnimator:
         )
 
         # Ground stations
-        for name, site in cfg.GROUND_STATIONS.items():
+        #
+        # All three sites sit within a few degrees of each other in central
+        # Europe, which on a full -180..180 world map collapses to only a
+        # handful of pixels apart. Giving every label the same (7, 7) point
+        # offset made them stack on top of one another. Instead, fan each
+        # label out to a different corner (and anchor the text on the side
+        # that points back at its own marker) so nearby sites stay legible.
+        _GS_LABEL_LAYOUT = [
+            dict(xytext=(9, 9), ha="left"),     # upper-right
+            dict(xytext=(9, -16), ha="left"),   # lower-right
+            dict(xytext=(-9, 9), ha="right"),   # upper-left
+            dict(xytext=(-9, -16), ha="right"), # lower-left
+        ]
+
+        for i, (name, site) in enumerate(cfg.GROUND_STATIONS.items()):
 
             point = self.ax.scatter(
                 site["lon_deg"],
@@ -185,6 +199,8 @@ class GaiaConopsAnimator:
 
             self.gs_points[name] = point
 
+            layout = _GS_LABEL_LAYOUT[i % len(_GS_LABEL_LAYOUT)]
+
             label = self.ax.annotate(
                 name.split(" (")[0],
                 (
@@ -192,7 +208,8 @@ class GaiaConopsAnimator:
                     site["lat_deg"]
                 ),
                 textcoords="offset points",
-                xytext=(7, 7),
+                xytext=layout["xytext"],
+                ha=layout["ha"],
                 fontsize=8,
                 color="white",
                 fontweight="bold",
@@ -241,24 +258,26 @@ class GaiaConopsAnimator:
             ),
         )
 
-        # H2Sat
-        self.h2sat_point = self.ax.scatter(
-            [cfg.H2SAT_LON_DEG],
-            [0],
+        # H2Sat — now SGP4-propagated (real TLE), so it isn't perfectly
+        # motionless: it has a small station-keeping inclination/eccentricity
+        # that shows up as a slow figure-8 wobble. Marker/label are created
+        # here and repositioned each frame in _update() (like the GAIA sats)
+        # instead of being pinned to a static point.
+        self.h2sat_point, = self.ax.plot(
+            [],
+            [],
             marker="D",
-            s=170,
+            markersize=13,
             color="gold",
-            edgecolors="white",
-            linewidths=1.2,
+            markeredgecolor="white",
+            markeredgewidth=1.2,
+            linestyle="None",
             zorder=12,
         )
 
-        self.ax.annotate(
+        self.h2sat_label = self.ax.annotate(
             "H2Sat",
-            (
-                cfg.H2SAT_LON_DEG,
-                0
-            ),
+            (cfg.H2SAT_LON_DEG, 0),
             textcoords="offset points",
             xytext=(8, 8),
             fontsize=8,
@@ -482,6 +501,20 @@ class GaiaConopsAnimator:
             f"T+ {format_hms(t_now)}"
         )
 
+        # H2Sat (SGP4-propagated; small but real motion, unlike the old
+        # fixed-point placeholder)
+        h2sat = self.timeline["h2sat"]
+
+        h2sat_lat = float(h2sat["lat_deg"][idx])
+        h2sat_lon = float(h2sat["lon_deg"][idx])
+
+        self.h2sat_point.set_data(
+            [h2sat_lon],
+            [h2sat_lat],
+        )
+
+        self.h2sat_label.xy = (h2sat_lon, h2sat_lat)
+
         # Satellites
         panel_y = 0.86
 
@@ -559,9 +592,17 @@ class GaiaConopsAnimator:
 
             label.set_text(label_text)
 
-            label.set_position(
-                (lon, lat)
-            )
+            # NOTE: Annotation.set_position() moves the TEXT anchor, which is
+            # interpreted in `textcoords` units (here "offset points" from
+            # `xy`). It does NOT move `xy` itself. Since `xy` was left at its
+            # creation-time value (0, 0) and never updated, calling
+            # set_position((lon, lat)) was silently reinterpreting the
+            # satellite's lon/lat as a *points offset* from the (0,0)
+            # data-space anchor -- so the label barely moved and appeared to
+            # "lag" far behind the marker. Updating `xy` (the anchored data
+            # point) instead keeps the fixed pixel offset from `xytext` and
+            # makes the label track the marker correctly.
+            label.xy = (lon, lat)
 
             label.set_color(
                 mode_color

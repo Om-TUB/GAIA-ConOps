@@ -1,11 +1,8 @@
 import numpy as np
 import config as cfg
+import sgp4_propagation as sgp4prop
 
-
-# ---------------------------------------------------------------------------
 # Low-level orbital mechanics
-# ---------------------------------------------------------------------------
-
 def solve_kepler(mean_anomaly_rad, eccentricity, tol=1e-10, max_iter=50):
     """Solve Kepler's equation M = E - e*sin(E) for eccentric anomaly E."""
     M = np.mod(np.asarray(mean_anomaly_rad, dtype=float), 2 * np.pi)
@@ -60,11 +57,6 @@ def j2_secular_rates(a_km, e, i_deg):
     )
 
     return raan_dot, argp_dot
-
-
-# ---------------------------------------------------------------------------
-# Orbit propagation
-# ---------------------------------------------------------------------------
 
 def propagate_orbit(elements, t_seconds):
     """
@@ -217,11 +209,7 @@ def propagate_orbit(elements, t_seconds):
         radius_km=r,
     )
 
-
-# ---------------------------------------------------------------------------
 # GEO satellite
-# ---------------------------------------------------------------------------
-
 def geo_fixed_position(lon_deg, t_seconds):
     """
     H2Sat: GEO satellite, station-kept at fixed longitude.
@@ -271,23 +259,8 @@ def geo_fixed_position(lon_deg, t_seconds):
         ),
     )
 
-
-# ---------------------------------------------------------------------------
 # Coordinate conversion
-# ---------------------------------------------------------------------------
-
 def geodetic_to_ecef(lat_deg, lon_deg, alt_km=0.0):
-    """
-    Convert spherical-Earth geodetic coordinates to ECEF.
-
-    Supports both scalars and arrays.
-
-    Scalar input:
-        returns shape (3,)
-
-    Array input:
-        returns shape (N, 3)
-    """
 
     lat = np.deg2rad(
         np.asarray(lat_deg, dtype=float)
@@ -327,10 +300,7 @@ def geodetic_to_ecef(lat_deg, lon_deg, alt_km=0.0):
     )
 
 
-# ---------------------------------------------------------------------------
 # Elevation geometry
-# ---------------------------------------------------------------------------
-
 def elevation_angle_deg(
     observer_lat_deg,
     observer_lon_deg,
@@ -339,37 +309,6 @@ def elevation_angle_deg(
     sat_lon_deg,
     sat_alt_km,
 ):
-    """
-    Elevation angle of a satellite as seen from an observer.
-
-    Parameters
-    ----------
-    observer_lat_deg:
-        Observer latitude.
-
-    observer_lon_deg:
-        Observer longitude.
-
-    observer_alt_km:
-        Observer altitude.
-
-    sat_lat_deg:
-        Target satellite latitude.
-
-    sat_lon_deg:
-        Target satellite longitude.
-
-    sat_alt_km:
-        Target satellite altitude.
-
-    Both scalar and array inputs are supported.
-
-    For array inputs the resulting ECEF coordinates have shape:
-
-        (N, 3)
-
-    where N is the number of time steps.
-    """
 
     obs_ecef = geodetic_to_ecef(
         observer_lat_deg,
@@ -440,11 +379,6 @@ def elevation_angle_deg(
 
     return el_deg
 
-
-# ---------------------------------------------------------------------------
-# LEO -> H2Sat visibility
-# ---------------------------------------------------------------------------
-
 def leo_sees_geo(
     leo_lat_deg,
     leo_lon_deg,
@@ -470,36 +404,11 @@ def leo_sees_geo(
 
     return el > 0.0
 
-
-# ---------------------------------------------------------------------------
 # Full mission timeline generation
-# ---------------------------------------------------------------------------
-
 def generate_timeline(
     duration_s=cfg.SIM_DURATION_S,
     step_s=cfg.SIM_TIMESTEP_S,
 ):
-    """
-    Propagate all satellites over the full simulation window and compute
-    visibility + mode at every timestep.
-
-    Returns:
-
-        {
-            "t_s": array,
-            "sats": {
-                satellite_name: {
-                    "lat_deg": ...,
-                    "lon_deg": ...,
-                    "alt_km": ...,
-                    "visibility": ...,
-                    "sees_h2sat": ...,
-                    "mode": ...
-                }
-            },
-            "h2sat": ...
-        }
-    """
 
     t = np.arange(
         0,
@@ -507,8 +416,15 @@ def generate_timeline(
         step_s,
     )
 
-    h2sat_track = geo_fixed_position(
-        cfg.H2SAT_LON_DEG,
+    # H2Sat: real satellite, propagated from its actual tracked TLE.
+    h2sat_satrec = sgp4prop.satrec_from_tle(
+        cfg.H2SAT_TLE_LINE1,
+        cfg.H2SAT_TLE_LINE2,
+    )
+
+    h2sat_track = sgp4prop.propagate_sgp4(
+        h2sat_satrec,
+        cfg.SIM_EPOCH_UTC,
         t,
     )
 
@@ -518,17 +434,31 @@ def generate_timeline(
         "h2sat": h2sat_track,
     }
 
-    for sat_name, elements in cfg.SATELLITES.items():
+    for sat_idx, (sat_name, elements) in enumerate(cfg.SATELLITES.items()):
 
-        track = propagate_orbit(
-            elements,
+        # GAIA-A/B: no fitted TLE exists yet (not flown) — seed SGP4
+        # directly from the mission's computed osculating elements.
+        # e == 0 (circular, by design) so true anomaly == mean anomaly,
+        # no eccentric-anomaly conversion needed for the seed value.
+        satrec = sgp4prop.keplerian_to_satrec(
+            satnum=90001 + sat_idx,
+            epoch_dt=cfg.SIM_EPOCH_UTC,
+            a_km=elements["a_km"],
+            e=elements["e"],
+            i_deg=elements["i_deg"],
+            raan_deg=elements["raan_deg"],
+            argp_deg=elements["argp_deg"],
+            mean_anomaly_deg=elements["true_anomaly_0_deg"],
+            bstar=cfg.GAIA_BSTAR,
+        )
+
+        track = sgp4prop.propagate_sgp4(
+            satrec,
+            cfg.SIM_EPOCH_UTC,
             t,
         )
 
-        # ---------------------------------------------------------------
         # Ground station + IoT visibility
-        # ---------------------------------------------------------------
-
         visibility = {}
 
         sites = {
@@ -551,21 +481,22 @@ def generate_timeline(
                 el >= site["min_elevation_deg"]
             )
 
-        # ---------------------------------------------------------------
         # H2Sat visibility
-        # ---------------------------------------------------------------
-
-        sees_h2sat = leo_sees_geo(
+        #
+        # Uses H2Sat's actual SGP4-propagated lat/lon/alt (small but real
+        # inclination/eccentricity wobble) rather than the fixed-longitude,
+        h2sat_el = elevation_angle_deg(
             track["lat_deg"],
             track["lon_deg"],
             track["alt_km"],
-            cfg.H2SAT_LON_DEG,
+            h2sat_track["lat_deg"],
+            h2sat_track["lon_deg"],
+            h2sat_track["alt_km"],
         )
 
-        # ---------------------------------------------------------------
-        # Mission mode
-        # ---------------------------------------------------------------
+        sees_h2sat = h2sat_el > 0.0
 
+        # Mission mode
         modes = assign_modes(
             visibility,
             sees_h2sat,
@@ -583,10 +514,7 @@ def generate_timeline(
     return results
 
 
-# ---------------------------------------------------------------------------
 # Mode assignment
-# ---------------------------------------------------------------------------
-
 def assign_modes(
     visibility,
     sees_h2sat,
@@ -616,25 +544,16 @@ def assign_modes(
         "TUBOGS (Optical)"
     ]
 
-    # ---------------------------------------------------------------
     # Priority 3: DTE Optical
-    # ---------------------------------------------------------------
-
     modes[tubogs_visible] = "DTE Optical"
 
-    # ---------------------------------------------------------------
     # Priority 2: ISL
-    # ---------------------------------------------------------------
-
     if cfg.ISL_PREFER_REALTIME:
         modes[sees_h2sat] = "ISL (Real-Time)"
     else:
         modes[sees_h2sat] = "ISL (Store&Fwd)"
 
-    # ---------------------------------------------------------------
     # Priority 1: IoT/Payload
-    # ---------------------------------------------------------------
-
     modes[iot_visible] = "IoT/Payload"
 
     return modes

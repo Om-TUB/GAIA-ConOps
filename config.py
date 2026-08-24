@@ -1,4 +1,7 @@
 import numpy as np
+from datetime import datetime, timezone, timedelta
+
+from time_utils import jd_fr, gmst_rad, subsolar_longitude_deg
 
 # PHYSICAL CONSTANTS
 MU_EARTH = 398600.4418          # km^3/s^2, Earth gravitational parameter
@@ -6,6 +9,18 @@ R_EARTH = 6378.137               # km, WGS84 equatorial radius
 J2 = 1.08262668e-3               # Earth J2 oblateness coefficient
 EARTH_ROTATION_RATE = 360.98564736629 / 86400.0   # deg/s (sidereal, precise)
 SECONDS_PER_DAY = 86400.0
+
+# SGP4 PROPAGATION EPOCH
+#
+# Real-world UTC epoch that simulation time t=0 corresponds to. Needed up
+# here (before the RAAN/LST solve below) because — unlike the old J2-only
+# propagator, which used an arbitrary "GMST=0, sun at 0 deg longitude at
+# t=0" convention — SGP4 is tied to real dates, so the sun's actual
+# position and Earth's actual rotation angle at this specific moment now
+# feed directly into that solve. The calendar date is an arbitrary "today"
+# for the demo; the time-of-day is solved for below so the mission's
+# 10:30 LST design target actually comes out right for that date.
+_SIM_EPOCH_DATE = datetime(2026, 8, 24, 0, 0, 0, tzinfo=timezone.utc)
 
 # SIMULATION WINDOW
 SIM_DURATION_S = 24 * 3600       # 24 hours, as requested
@@ -40,20 +55,29 @@ GAIA_ORBITAL_PERIOD_S = 2 * np.pi * np.sqrt(GAIA_SEMI_MAJOR_AXIS_KM**3 / MU_EART
 
 # --- RAAN: chosen so ground track crosses Namibia at 10:30 LOCAL SOLAR TIME
 # For a sun-synchronous orbit, Local Time of Ascending/relevant Node is fixed
-# by RAAN relative to the sun's position. We solve numerically at sim time t=0
-# for the RAAN that places the satellite over Etosha (16 deg E, -19 deg lat)
-# at a true anomaly consistent with 10:30 local solar time.
+# by RAAN relative to the sun's position. We solve for the RAAN that places
+# the satellite over Etosha (16 deg E, -19 deg lat) at simulation t=0, at a
+# true anomaly consistent with 10:30 local solar time.
 #
-# Simplification (explicitly noted): we treat the sim epoch as the reference
-# day, place the sun at RA_sun = 0 deg (i.e., epoch date chosen = a vernal
-# equinox), and solve for RAAN and starting true anomaly jointly so that:
+# This fixes RAAN_0 and true_anomaly_0 for satellite A at t=0:
 #   1) latitude of ground track = -19.0 deg (Etosha latitude) at crossing
 #   2) local solar time at that crossing = 10:30
 #   3) longitude at that crossing = 16.0 deg E (Etosha longitude)
-# This fixes RAAN_0 and true_anomaly_0 for satellite A at t=0.
 #
-# NOTE: This is a design choice, not a document-specified value (the ConOps
-# left RAAN blank). It is clearly isolated here for you to change.
+# NOTE: RAAN itself is a design choice, not a document-specified value (the
+# ConOps left it blank) — the target LST is the actual requirement.
+#
+# Getting (2) and (3) to both hold at the same instant t=0 needs the real
+# sun position and real Earth-rotation angle at whatever calendar date the
+# sim starts on (SIM_EPOCH_UTC). Earlier revisions of this file sidestepped
+# that by inventing a fictitious epoch where the sun sits at 0 deg
+# Earth-fixed longitude and GMST=0 — convenient algebra, but it silently
+# breaks once the propagator (SGP4, see sgp4_propagation.py) is tied to a
+# real UTC date, since the real sun and real Earth rotation angle at that
+# date generally aren't 0. Fixed here by solving for the time-of-day
+# component of SIM_EPOCH_UTC that actually makes the subsolar longitude
+# equal what's needed for a 10:30 crossing over Etosha, then using the
+# real GMST at that solved epoch for the RAAN solve below.
 
 ETOSHA_LAT_DEG = -19.0
 ETOSHA_LON_DEG = 16.0
@@ -67,31 +91,42 @@ _u_ascending = np.arcsin(np.clip(_sin_u, -1.0, 1.0))   # radians, ascending-pass
 GAIA_TRUE_ANOMALY_0_DEG = np.rad2deg(_u_ascending) - GAIA_ARG_PERIGEE_DEG
 
 # Local solar time -> hour angle of sun relative to satellite subpoint longitude.
-# LST_hours = 12 + (lon_deg - sun_subsolar_lon_deg) / 15
-# We define sim epoch such that the subsolar longitude at t=0 is 0 deg E
-# (i.e., simulation start = local noon at Greenwich meridian, an explicit
-# convention so GMST(t=0) = 0 exactly). This lets us solve RAAN directly.
-SUBSOLAR_LON_AT_EPOCH_DEG = 0.0
-GMST_AT_EPOCH_DEG = 0.0   # convention: Earth-fixed frame aligned with inertial frame at t=0
+# LST_hours = 12 + (lon_deg - subsolar_lon_deg) / 15
+# Solve for the subsolar longitude a 10:30 crossing at Etosha's longitude
+# requires, then solve for the UTC time-of-day (on _SIM_EPOCH_DATE's
+# calendar date) at which the real sun is actually at that longitude.
+# Subsolar longitude sweeps a very close to exactly linear -360 deg per
+# solar day (equation-of-time curvature is under a minute over the few
+# hours searched here), so a single linear solve from a t=0 sample is
+# accurate to a small fraction of a second of local time.
+_target_subsolar_lon_deg = (
+    ETOSHA_LON_DEG - 15.0 * (TARGET_LOCAL_SOLAR_TIME_HOURS - 12.0)
+)
 
-# satellite longitude at crossing (inertial RAAN frame) must equal:
-#   lon = 15*(LST - 12) + SUBSOLAR_LON_AT_EPOCH_DEG   (Earth-fixed, at t=0 since GMST=0)
-_lon_at_crossing_deg = 15.0 * (TARGET_LOCAL_SOLAR_TIME_HOURS - 12.0) + SUBSOLAR_LON_AT_EPOCH_DEG
-# But target is Etosha's actual longitude -> the crossing must occur at a
-# specific TIME after t=0 (not at t=0 itself) so that Earth has rotated
-# ETOSHA_LON_DEG - lon_at_crossing_deg relative to the orbit plane.
-# We instead directly place RAAN so the ascending node aligns correctly and
-# then find t_cross by propagation. To keep this tractable in closed form,
-# define RAAN_0 such that at u = u_ascending, the inertial longitude equals
-# ETOSHA_LON_DEG, and separately verify LST numerically at runtime (printed
-# at startup so you can confirm it's ~10:30).
-#
-# Inertial subsatellite longitude (in Earth-fixed frame, GMST=0 at t=0):
+_jd0, _ = jd_fr(_SIM_EPOCH_DATE)
+_subsolar_lon_at_midnight_deg = subsolar_longitude_deg(_jd0, 0.0)
+_delta_lon_deg = (
+    (_target_subsolar_lon_deg - _subsolar_lon_at_midnight_deg + 180.0) % 360.0
+    - 180.0
+)
+# Subsolar longitude increases ~+360 deg per UTC day (as Earth's rotation
+# carries the Greenwich meridian eastward under the sun), not decreases —
+# verified empirically against subsolar_longitude_deg() rather than assumed.
+_epoch_day_fraction = (_delta_lon_deg / 360.0) % 1.0
+
+SIM_EPOCH_UTC = _SIM_EPOCH_DATE + timedelta(days=_epoch_day_fraction)
+
+_jd_epoch, _fr_epoch = jd_fr(SIM_EPOCH_UTC)
+GMST_AT_EPOCH_DEG = np.rad2deg(gmst_rad(_jd_epoch, _fr_epoch))
+SUBSOLAR_LON_AT_EPOCH_DEG = subsolar_longitude_deg(_jd_epoch, _fr_epoch)
+
+# Inertial subsatellite longitude (Earth-fixed frame):
 #   lambda = RAAN + atan2(cos(i)*sin(u), cos(u)) - GMST(t)
-# At t=0 (GMST=0), solve RAAN so lambda = ETOSHA_LON_DEG at u = u_ascending:
+# At t=0, solve RAAN so lambda = ETOSHA_LON_DEG at u = u_ascending, given
+# the real GMST at the (now solved-for) epoch:
 _i_rad = np.deg2rad(GAIA_INCLINATION_DEG)
 _delta_lon = np.arctan2(np.cos(_i_rad) * np.sin(_u_ascending), np.cos(_u_ascending))
-GAIA_RAAN_0_DEG = ETOSHA_LON_DEG - np.rad2deg(_delta_lon)
+GAIA_RAAN_0_DEG = ETOSHA_LON_DEG - np.rad2deg(_delta_lon) + GMST_AT_EPOCH_DEG
 
 # Along-track separation between GAIA-A and GAIA-B: < 1000 km, use 800 km.
 GAIA_SAT_SEPARATION_KM = 800.0
@@ -121,12 +156,34 @@ SATELLITES = {
     ),
 }
 
-# H2SAT (Heinrich Hertz) — GEO relay satellite
-H2SAT_LON_DEG = 0.7
+# SGP4 PROPAGATION
+#
+# (SIM_EPOCH_UTC itself is solved for above, before the RAAN/LST targeting
+# block, since that solve needs it.)
+
+# GAIA-A/B haven't flown, so there's no fitted TLE to seed SGP4 from — see
+# sgp4_propagation.py docstring for how they're initialized instead.
+# BSTAR estimated for a 500 km SSO 3U-class CubeSat (Cd ~ 2.2,
+# area/mass ~ 0.01 m^2/kg); replace with the real fitted value once the
+# satellites are catalogued.
+GAIA_BSTAR = 1.2e-4  # 1/earth radii
+
+# H2SAT (Heinrich Hertz) — GEO relay satellite, real satellite launched 2023
+# (NORAD 57213 / COSPAR 2023-093A). Ground-track longitude/altitude below
+# are only used as fallbacks/labels; actual position now comes from SGP4
+# propagation of the tracked TLE below.
+H2SAT_LON_DEG = 0.7  # nominal station-kept longitude (datasheet)
 H2SAT_ALTITUDE_KM = 35786.0   # standard GEO altitude
 H2SAT_SEMI_MAJOR_AXIS_KM = R_EARTH + H2SAT_ALTITUDE_KM
 H2SAT_ECCENTRICITY = 0.0
 H2SAT_INCLINATION_DEG = 0.0
+
+# Real tracked TLE for H2Sat, NORAD 57213. TLEs age — accuracy degrades
+# from days to weeks after epoch, so refresh this from a public source
+# (e.g. celestrak.org, CATNR=57213) for anything beyond a quick demo run.
+H2SAT_TLE_LINE1 = "1 57213U 23093A   26235.07752475 -.00000001  00000-0  00000-0 0  9992"
+H2SAT_TLE_LINE2 = "2 57213   0.0206  51.1055 0001204 310.3713 358.5178  1.00270896 11596"
+H2SAT_TLE_EPOCH_NOTE = "epoch 2026 day 235.0775 (~Aug 23, 2026 01:51 UTC)"
 
 # GROUND STATIONS / FIXED SITES (user-provided coordinates)
 GROUND_STATIONS = {

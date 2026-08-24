@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 import numpy as np
 import config as cfg
 import orbit_propagation as prop
 from visualization import run_animation
+from time_utils import jd_fr, subsolar_longitude_deg
 
 
 def print_derived_parameters():
@@ -35,8 +38,15 @@ def print_derived_parameters():
     closest_idx = np.argmin(dist)
 
     crossing_lon = lon[closest_idx]
-    gmst_deg_at_cross = cfg.GMST_AT_EPOCH_DEG + cfg.EARTH_ROTATION_RATE * t[closest_idx]
-    subsolar_lon_at_cross = cfg.SUBSOLAR_LON_AT_EPOCH_DEG  # sun fixed in this simplified model
+
+    # Real subsolar longitude AT THE CROSSING TIME (not at epoch): the sun
+    # moves ~15 deg/hour in the Earth-fixed frame, which is not negligible
+    # over the up-to ~114 min window searched above, so this is sampled at
+    # t[closest_idx] rather than reusing a value fixed at t=0.
+    crossing_dt = cfg.SIM_EPOCH_UTC + timedelta(seconds=float(t[closest_idx]))
+    jd_cross, fr_cross = jd_fr(crossing_dt)
+    subsolar_lon_at_cross = subsolar_longitude_deg(jd_cross, fr_cross)
+
     local_solar_time = 12.0 + (crossing_lon - subsolar_lon_at_cross) / 15.0
     local_solar_time = local_solar_time % 24.0
 
