@@ -122,4 +122,4 @@ Not inspected in detail for this document. It's invoked from `main.py` with the 
 
 ## Related documentation
 
-See `MODES_AND_ASSUMPTIONS.md` for the operations-modes list written for internal/non-technical reference, and for the assumptions made in producing this documentation.
+See `ConOps.doc` for the operations-modes list written for internal/non-technical reference, and for the assumptions made in producing this documentation.
