@@ -11,10 +11,8 @@ A concept-of-operations (ConOps) simulator and visualizer for the **GAIA-MISSION
 | `orbit_propagation.py` | Orbital mechanics (Kepler solver, J2 secular rates, ECI→geodetic conversion), elevation-angle geometry, visibility checks, and mode-selection logic. |
 | `visualization.py` | Animation / rendering of the ground tracks and mode state (not inspected in detail for this doc). |
 | `earth_texture.jpg` | Basemap texture asset for the animation. |
-| `sgp4_propagation.py` *(referenced, not confirmed present in the listing pulled for this doc)* | SGP4 wrapper: build a satellite record from a TLE, build one from Keplerian elements, and propagate either forward in time. |
-| `time_utils.py` *(referenced, not confirmed present in the listing pulled for this doc)* | Julian date / GMST / subsolar-longitude helpers used by `config.py` and `main.py`. |
-
-> `sgp4_propagation.py` and `time_utils.py` are imported by the confirmed files but didn't appear in the top-level file listing fetched for this doc (GitHub's file browser showed a truncated "View all files" list). Verify their presence/location before relying on this as onboarding material.
+| `sgp4_propagation.py` | SGP4 wrapper: build a satellite record from a TLE, build one from Keplerian elements, and propagate either forward in time. |
+| `time_utils.py` | Julian date / GMST / subsolar-longitude helpers used by `config.py` and `main.py`. |
 
 ## Running it
 
