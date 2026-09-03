@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.animation import FuncAnimation, PillowWriter
 import matplotlib.image as mpimg
-import config as cfg
+import CONOPs.conops_config as cfg
 
 # Utility functions
 def format_hms(seconds):

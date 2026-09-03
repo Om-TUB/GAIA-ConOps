@@ -1,7 +1,7 @@
 import numpy as np
 from datetime import datetime, timezone, timedelta
 
-from time_utils import jd_fr, gmst_rad, subsolar_longitude_deg
+from common.time_utils import jd_fr, gmst_rad, subsolar_longitude_deg
 
 # PHYSICAL CONSTANTS
 MU_EARTH = 398600.4418          # km^3/s^2, Earth gravitational parameter
@@ -23,8 +23,8 @@ SECONDS_PER_DAY = 86400.0
 _SIM_EPOCH_DATE = datetime(2026, 8, 24, 0, 0, 0, tzinfo=timezone.utc)
 
 # SIMULATION WINDOW
-SIM_DURATION_S = 3600       # 3 hours: enough for two useful GAIA passes
-SIM_TIMESTEP_S = 30              # propagation step (s) — animation subsamples this
+SIM_DURATION_S = 1800       
+SIM_TIMESTEP_S = 60              # propagation step (s) — animation subsamples this
 # Epoch: arbitrary reference start time (J2000-relative days), used only for
 # Earth rotation angle (GMST) bookkeeping. Day 0 = start of simulation.
 EPOCH_DAY_OFFSET = 0.0
@@ -276,8 +276,8 @@ MODE_COLORS = {
 ISL_PREFER_REALTIME = True
 
 # VISUALIZATION SETTINGS
-ANIMATION_INTERVAL_MS = 75        # wall-clock ms between animation frames
-FRAME_SIM_STEP_S = 45             # sim-seconds advanced per animation frame
+ANIMATION_INTERVAL_MS = 250       # wall-clock ms between animation frames
+FRAME_SIM_STEP_S = 60             # sim-seconds advanced per animation frame
 MAP_LON_RANGE = (-180, 180)
 MAP_LAT_RANGE = (-90, 90)
 GROUND_TRACK_TRAIL_MINUTES = 30   # length of fading trail behind each satellite
@@ -285,5 +285,5 @@ GROUND_TRACK_TRAIL_MINUTES = 30   # length of fading trail behind each satellite
 # GIF EXPORT
 SAVE_GIF = True                  # set True to export the animation
 GIF_FILENAME = "gaia_conops.gif"
-GIF_FPS = 20
-GIF_DPI = 120
+GIF_FPS = 5
+GIF_DPI = 200

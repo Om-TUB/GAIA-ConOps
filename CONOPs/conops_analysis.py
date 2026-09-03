@@ -1,10 +1,10 @@
 from datetime import timedelta
 
 import numpy as np
-import config as cfg
-import orbit_propagation as prop
-from visualization import run_animation
-from time_utils import jd_fr, subsolar_longitude_deg
+import CONOPs.conops_config as cfg
+from common import orbit_propagation as prop
+from CONOPs.visualization import run_animation
+from common.time_utils import jd_fr, subsolar_longitude_deg
 
 
 def print_derived_parameters():

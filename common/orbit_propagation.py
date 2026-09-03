@@ -1,6 +1,6 @@
 import numpy as np
-import config as cfg
-import sgp4_propagation as sgp4prop
+import CONOPs.conops_config as cfg
+from common import sgp4_propagation as sgp4prop
 
 # Low-level orbital mechanics
 def solve_kepler(mean_anomaly_rad, eccentricity, tol=1e-10, max_iter=50):
